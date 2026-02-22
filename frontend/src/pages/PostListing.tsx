@@ -1,11 +1,16 @@
-import { useState } from 'react'
-import { Upload, X, Tag, MapPin, Camera } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Upload, X, Tag, MapPin, Camera, Loader2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import toast from 'react-hot-toast'
 
 const CATEGORIES = ['Electronics', 'Furniture', 'Fashion', 'Vehicles', 'Properties', 'Sports', 'Books', 'Other']
+const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
 
 export default function PostListing() {
+    const navigate = useNavigate()
+    const fileInputRef = useRef<HTMLInputElement>(null)
+
     const [listingType, setListingType] = useState<'FIXED' | 'AUCTION'>('FIXED')
     const [title, setTitle] = useState('')
     const [description, setDescription] = useState('')
@@ -14,21 +19,112 @@ export default function PostListing() {
     const [startPrice, setStartPrice] = useState('')
     const [endDate, setEndDate] = useState('')
     const [location, setLocation] = useState('')
-    const [images, setImages] = useState<string[]>([])
 
-    const handleImageDrop = (e: React.DragEvent) => {
-        e.preventDefault()
-        // In production, upload to storage and get URL
-        toast('Image upload will be handled by backend storage')
+    // Image state
+    const [imageUrl, setImageUrl] = useState<string | null>(null)
+    const [imagePreview, setImagePreview] = useState<string | null>(null)
+    const [uploading, setUploading] = useState(false)
+    const [submitting, setSubmitting] = useState(false)
+
+    const token = localStorage.getItem('token')
+
+    // ── Upload handler ────────────────────────────────────────────────────────
+    const uploadFile = async (file: File) => {
+        if (!file.type.startsWith('image/')) {
+            toast.error('Please select an image file (JPEG, PNG, WEBP)')
+            return
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error('Image must be under 5 MB')
+            return
+        }
+
+        // Show local preview immediately
+        setImagePreview(URL.createObjectURL(file))
+        setUploading(true)
+
+        try {
+            const form = new FormData()
+            form.append('image', file)
+
+            const res = await fetch(`${API}/api/upload`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                body: form,
+            })
+            if (!res.ok) throw new Error(await res.text())
+            const data = await res.json()
+            setImageUrl(data.url)
+            toast.success('Photo uploaded!')
+        } catch (err: any) {
+            toast.error('Upload failed: ' + err.message)
+            setImagePreview(null)
+        } finally {
+            setUploading(false)
+        }
     }
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (file) uploadFile(file)
+    }
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault()
+        const file = e.dataTransfer.files?.[0]
+        if (file) uploadFile(file)
+    }
+
+    const removeImage = () => {
+        setImageUrl(null)
+        setImagePreview(null)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+
+    // ── Submit ────────────────────────────────────────────────────────────────
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!title || !category || !location) {
             toast.error('Please fill in all required fields')
             return
         }
-        toast.success('Listing submitted! (Connect backend to persist)')
+
+        setSubmitting(true)
+        try {
+            const payload: Record<string, any> = {
+                title,
+                description,
+                category,
+                type: listingType,
+                location,
+                image_url: imageUrl ?? '',
+            }
+
+            if (listingType === 'FIXED') {
+                payload.price = parseFloat(price)
+            } else {
+                payload.start_price = parseFloat(startPrice)
+                payload.end_time = new Date(endDate).toISOString()
+            }
+
+            const res = await fetch(`${API}/api/products`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(payload),
+            })
+
+            if (!res.ok) throw new Error(await res.text())
+
+            toast.success('🎉 Listing posted!')
+            navigate('/dashboard')
+        } catch (err: any) {
+            toast.error('Failed to post listing: ' + err.message)
+        } finally {
+            setSubmitting(false)
+        }
     }
 
     return (
@@ -51,8 +147,8 @@ export default function PostListing() {
                                     type="button"
                                     onClick={() => setListingType(t)}
                                     className={`p-4 rounded-xl border-2 text-left transition-all ${listingType === t
-                                            ? 'border-orange-500 bg-orange-50'
-                                            : 'border-gray-200 hover:border-orange-200'
+                                        ? 'border-orange-500 bg-orange-50'
+                                        : 'border-gray-200 hover:border-orange-200'
                                         }`}
                                 >
                                     <div className="flex items-center gap-3">
@@ -72,25 +168,58 @@ export default function PostListing() {
                     {/* Photos */}
                     <div className="card p-6">
                         <h2 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Camera size={18} /> Photos</h2>
-                        <div
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={handleImageDrop}
-                            className="border-2 border-dashed border-gray-200 rounded-xl p-10 text-center hover:border-orange-300 transition-colors cursor-pointer"
-                        >
-                            <Upload size={32} className="mx-auto text-gray-300 mb-3" />
-                            <p className="text-sm text-gray-500">Drag & drop photos here, or <span className="text-orange-500 font-medium">browse</span></p>
-                            <p className="text-xs text-gray-400 mt-1">PNG, JPG up to 10MB each. First photo is the cover.</p>
-                        </div>
-                        {images.length > 0 && (
-                            <div className="flex flex-wrap gap-3 mt-4">
-                                {images.map((img, i) => (
-                                    <div key={i} className="relative">
-                                        <img src={img} className="w-20 h-20 object-cover rounded-lg" alt="" />
-                                        <button onClick={() => setImages(images.filter((_, j) => j !== i))} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5">
-                                            <X size={12} />
-                                        </button>
+
+                        {/* Hidden file input */}
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            className="hidden"
+                            onChange={handleFileChange}
+                        />
+
+                        {!imagePreview ? (
+                            <div
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={handleDrop}
+                                onClick={() => fileInputRef.current?.click()}
+                                className="border-2 border-dashed border-gray-200 rounded-xl p-10 text-center hover:border-orange-300 transition-colors cursor-pointer"
+                            >
+                                {uploading ? (
+                                    <Loader2 size={32} className="mx-auto text-orange-400 mb-3 animate-spin" />
+                                ) : (
+                                    <Upload size={32} className="mx-auto text-gray-300 mb-3" />
+                                )}
+                                <p className="text-sm text-gray-500">
+                                    Drag & drop a photo here, or{' '}
+                                    <span className="text-orange-500 font-medium">browse</span>
+                                </p>
+                                <p className="text-xs text-gray-400 mt-1">JPEG, PNG, WEBP — max 5 MB</p>
+                            </div>
+                        ) : (
+                            <div className="relative w-fit mt-2">
+                                <img
+                                    src={imagePreview}
+                                    alt="Preview"
+                                    className="w-40 h-40 object-cover rounded-xl border border-gray-200 shadow-sm"
+                                />
+                                {uploading && (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-white/70 rounded-xl">
+                                        <Loader2 size={24} className="text-orange-500 animate-spin" />
                                     </div>
-                                ))}
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={removeImage}
+                                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow hover:bg-red-600 transition-colors"
+                                >
+                                    <X size={14} />
+                                </button>
+                                {imageUrl && (
+                                    <span className="absolute bottom-2 left-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full">
+                                        ✓ Uploaded
+                                    </span>
+                                )}
                             </div>
                         )}
                     </div>
@@ -160,11 +289,15 @@ export default function PostListing() {
 
                     {/* Submit */}
                     <div className="flex gap-4">
-                        <button type="submit" className="btn-primary flex-1 py-3.5 text-base">
-                            🚀 Post Listing
+                        <button
+                            type="submit"
+                            disabled={submitting || uploading}
+                            className="btn-primary flex-1 py-3.5 text-base disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                            {submitting ? <><Loader2 size={18} className="animate-spin" /> Posting...</> : '🚀 Post Listing'}
                         </button>
-                        <button type="button" className="btn-outline px-6 py-3.5">
-                            Save Draft
+                        <button type="button" onClick={() => navigate(-1)} className="btn-outline px-6 py-3.5">
+                            Cancel
                         </button>
                     </div>
                 </form>

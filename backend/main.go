@@ -43,13 +43,17 @@ func main() {
 	// ── Router ────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
 
+	// ── Static file server for uploaded images ────────────────────────────
+	uploadsFS := http.FileServer(http.Dir("./uploads"))
+	r.Handle("/uploads/*", http.StripPrefix("/uploads/", uploadsFS))
+
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:5173", "http://frontend:5173"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "multipart/form-data"},
 		AllowCredentials: true,
 	}))
 
@@ -88,6 +92,8 @@ func main() {
 	// ── Protected routes ──────────────────────────────────────────────────
 	r.Group(func(r chi.Router) {
 		r.Use(authmw.RequireAuth)
+		r.Post("/api/upload", handlers.UploadImage)
+		r.Post("/api/products", handlers.CreateProduct)
 		r.Get("/api/wallet", handlers.GetWallet)
 		r.Post("/api/wallet/deposit", handlers.Deposit)
 		r.Post("/api/wallet/withdraw", handlers.Withdraw)
