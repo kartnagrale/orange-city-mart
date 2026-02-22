@@ -15,7 +15,7 @@ import AuthPage from './pages/AuthPage'
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
         <Routes>
           {/* Public — no auth required */}
           <Route path="/" element={<LandingPage />} />
