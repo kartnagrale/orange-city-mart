@@ -1,49 +1,241 @@
-import { useParams } from 'react-router-dom'
-import { MapPin, Heart, Share2, CheckCircle, ChevronRight } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { useParams, Link } from 'react-router-dom'
+import {
+    MapPin, Heart, Share2, ChevronRight, Gavel, Clock,
+    CheckCircle, HandshakeIcon, AlertCircle, Hourglass, RefreshCw
+} from 'lucide-react'
 import Navbar from '../components/Navbar'
 import BidPanel from '../components/BidPanel'
+import { useAuth } from '../context/AuthContext'
+import toast from 'react-hot-toast'
 
-const MOCK_AUCTION = {
-    id: 'a1',
-    title: 'Vintage 1970s Leather Armchair - Restored',
-    description: `A beautifully preserved mid-century modern armchair, originally manufactured in the 1970s. The piece features its original cognac leather upholstery, which has developed a rich, authentic patina over the decades. The frame is constructed from solid teak wood, known for its durability and warm grain patterns.\n\nProfessionally restored by our team in Nagpur. The restoration process involved cleaning and conditioning the leather, as well as refinishing the wood frame. The foam cushioning has been replaced with high-density foam.`,
-    price: 18500,
-    startPrice: 12000,
-    location: 'Civil Lines, Nagpur',
-    seller: 'Nagpur Vintage Goods',
-    verified: true,
-    endTime: new Date(Date.now() + 2 * 3600 * 1000 + 14 * 60 * 1000).toISOString(),
-    specs: [
-        { label: 'Dimensions', value: '32" H x 28" W x 30" D' },
-        { label: 'Material', value: 'Genuine Leather, Teak Wood' },
-        { label: 'Condition', value: 'Excellent (restored)' },
-        { label: 'Origin', value: 'Private estate, Mumbai' },
-    ],
-    images: [
-        'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&q=80',
-        'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=400&q=80',
-    ],
-    bids: [
-        { user: 'User88***', time: '2 mins ago', amount: 18500 },
-        { user: 'Rahul_K***', time: '5 mins ago', amount: 17000 },
-        { user: 'Jasmin***', time: '12 mins ago', amount: 15500 },
-        { user: 'Manish***', time: '25 mins ago', amount: 13000 },
-    ],
+interface AuctionData {
+    id: string
+    product_id: string
+    title: string
+    description: string
+    image_url: string | null
+    seller_id: string
+    seller_name: string
+    start_price: number
+    current_highest_bid: number
+    highest_bidder_id: string | null
+    end_time: string
+    status: 'ACTIVE' | 'ENDED' | 'CANCELLED'
+    winner_approved_at: string | null
+    seller_approved_at: string | null
+    settlement_status: 'PENDING' | 'COMPLETED' | null
 }
 
-const RELATED = [
-    { title: 'Beige Minimalist Sofa', price: 12500, img: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=300&q=80' },
-    { title: 'Teak Side Table', price: 2800, img: 'https://images.unsplash.com/photo-1530018352490-c6eef07fd7d5?w=300&q=80' },
-    { title: 'Antique Brass Lamp', price: 1200, img: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=300&q=80' },
-    { title: 'Abstract Wall Art', price: 5000, img: 'https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=300&q=80' },
-]
+interface BidHistory {
+    amount: number
+    placed_at: string
+    bidder_tag: string
+}
 
-// Demo user ID — in a real app this comes from auth context
-const DEMO_USER_ID = 'buyer-demo-uuid'
+function timeAgo(iso: string): string {
+    const diff = Date.now() - new Date(iso).getTime()
+    const m = Math.floor(diff / 60000)
+    if (m < 1) return 'just now'
+    if (m < 60) return `${m}m ago`
+    const h = Math.floor(m / 60)
+    if (h < 24) return `${h}h ago`
+    return `${Math.floor(h / 24)}d ago`
+}
 
+// ── Settlement Panel ─────────────────────────────────────────────────────────
+function SettlementPanel({
+    auctionId,
+    isWinner,
+    isSeller,
+    winnerApproved,
+    sellerApproved,
+    settlementStatus,
+    amount,
+    token,
+    onApproved,
+}: {
+    auctionId: string
+    isWinner: boolean
+    isSeller: boolean
+    winnerApproved: boolean
+    sellerApproved: boolean
+    settlementStatus: 'PENDING' | 'COMPLETED' | null
+    amount: number
+    token: string | null
+    onApproved: () => void
+}) {
+    const [loading, setLoading] = useState(false)
+
+    if (settlementStatus === 'COMPLETED') {
+        return (
+            <div className="card p-6 bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 space-y-3">
+                <div className="flex items-center gap-2 text-green-700 font-bold text-lg">
+                    <CheckCircle size={22} /> Settlement Complete
+                </div>
+                {isWinner && (
+                    <p className="text-sm text-green-600">
+                        ₹{amount.toLocaleString('en-IN')} transferred to the seller. Item is yours!
+                    </p>
+                )}
+                {isSeller && (
+                    <p className="text-sm text-green-600">
+                        ₹{amount.toLocaleString('en-IN')} has been added to your wallet.
+                    </p>
+                )}
+            </div>
+        )
+    }
+
+    const myApproval = isWinner ? winnerApproved : sellerApproved
+    const otherApproval = isWinner ? sellerApproved : winnerApproved
+    const myRole = isWinner ? 'winner' : 'seller'
+    const otherRole = isWinner ? 'seller' : 'winner'
+
+    const handleApprove = async () => {
+        setLoading(true)
+        try {
+            const res = await fetch(`/api/auctions/${auctionId}/settle`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+            })
+            if (!res.ok) {
+                const text = await res.text()
+                throw new Error(text.trim() || 'Approval failed')
+            }
+            toast.success('Approval recorded!')
+            onApproved()
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Failed to approve')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <div className="card p-6 space-y-4 border-2 border-orange-200 bg-orange-50">
+            <div className="flex items-center gap-2 text-orange-800 font-bold">
+                <HandshakeIcon size={20} /> Settlement Required
+            </div>
+            <p className="text-sm text-orange-700">
+                The auction has ended. Once both parties confirm the offline handoff,
+                <span className="font-bold"> ₹{amount.toLocaleString('en-IN')} </span>
+                will be transferred to the seller.
+            </p>
+
+            {/* Approval status indicators */}
+            <div className="space-y-2">
+                <div className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${winnerApproved ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    {winnerApproved ? <CheckCircle size={15} /> : <Hourglass size={15} />}
+                    <span>Winner {winnerApproved ? 'confirmed receipt' : 'has not confirmed yet'}</span>
+                </div>
+                <div className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${sellerApproved ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    {sellerApproved ? <CheckCircle size={15} /> : <Hourglass size={15} />}
+                    <span>Seller {sellerApproved ? 'confirmed handoff' : 'has not confirmed yet'}</span>
+                </div>
+            </div>
+
+            {/* CTA */}
+            {myApproval ? (
+                <div className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    <AlertCircle size={14} />
+                    Waiting for the {otherRole} to confirm…
+                </div>
+            ) : (isSeller || isWinner) ? (
+                <button
+                    onClick={handleApprove}
+                    disabled={loading}
+                    className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                    <HandshakeIcon size={16} />
+                    {loading
+                        ? 'Confirming…'
+                        : isWinner
+                            ? '✓ I received the item'
+                            : '✓ I handed over the item'}
+                </button>
+            ) : null}
+
+            {!isSeller && !isWinner && (
+                <p className="text-xs text-gray-400 text-center">You are observing this auction's settlement.</p>
+            )}
+            <p className="text-xs text-gray-400 text-center">
+                {myApproval ? `You approved as ${myRole}. ` : ''}
+                {otherApproval ? `${otherRole.charAt(0).toUpperCase() + otherRole.slice(1)} has also approved. ` : ''}
+            </p>
+        </div>
+    )
+}
+
+// ── Main Page ────────────────────────────────────────────────────────────────
 export default function AuctionDetail() {
-    const { id } = useParams()
-    const auction = { ...MOCK_AUCTION, id: id || MOCK_AUCTION.id }
+    const { id } = useParams<{ id: string }>()
+    const { user, token } = useAuth()
+
+    const [auction, setAuction] = useState<AuctionData | null>(null)
+    const [bids, setBids] = useState<BidHistory[]>([])
+    const [walletBalance, setWalletBalance] = useState(0)
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState('')
+
+    const fetchAll = async () => {
+        if (!id) return
+        try {
+            const headers: Record<string, string> = {}
+            if (token) headers.Authorization = `Bearer ${token}`
+
+            const [aRes, bRes, wRes] = await Promise.all([
+                fetch(`/api/auctions/${id}`, { headers }),
+                fetch(`/api/auctions/${id}/bids`, { headers }),
+                token ? fetch('/api/wallet', { headers }) : Promise.resolve(null),
+            ])
+
+            if (!aRes.ok) throw new Error('Auction not found')
+            const aData: AuctionData = await aRes.json()
+            setAuction(aData)
+
+            const bData: BidHistory[] = await bRes.json()
+            setBids(bData)
+
+            if (wRes && wRes.ok) {
+                const wData = await wRes.json()
+                setWalletBalance(wData.balance ?? 0)
+            }
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : 'Failed to load auction')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    useEffect(() => { fetchAll() }, [id, token])
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gray-50">
+                <Navbar />
+                <div className="flex items-center justify-center py-48 text-gray-400">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500" />
+                </div>
+            </div>
+        )
+    }
+
+    if (error || !auction) {
+        return (
+            <div className="min-h-screen bg-gray-50">
+                <Navbar />
+                <div className="flex flex-col items-center justify-center py-48 gap-4 text-gray-400">
+                    <AlertCircle size={48} className="opacity-30" />
+                    <p className="text-lg font-medium">{error || 'Auction not found'}</p>
+                    <Link to="/dashboard" className="btn-primary">Back to Dashboard</Link>
+                </div>
+            </div>
+        )
+    }
+
+    const isWinner = !!(user && auction.highest_bidder_id === user.id)
+    const isSeller = !!(user && auction.seller_id === user.id)
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -54,7 +246,7 @@ export default function AuctionDetail() {
                 <nav className="flex items-center gap-2 text-sm text-gray-400">
                     <a href="/" className="hover:text-orange-500">Home</a>
                     <ChevronRight size={14} />
-                    <a href="/dashboard" className="hover:text-orange-500">Furniture</a>
+                    <a href="/dashboard" className="hover:text-orange-500">Dashboard</a>
                     <ChevronRight size={14} />
                     <span className="text-gray-700 truncate max-w-xs">{auction.title}</span>
                 </nav>
@@ -62,12 +254,12 @@ export default function AuctionDetail() {
 
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Left: Images + Details */}
+                    {/* Left: Image + Details */}
                     <div className="lg:col-span-2 space-y-6">
                         {/* Image */}
                         <div className="card overflow-hidden relative group">
                             <img
-                                src={auction.images[0]}
+                                src={auction.image_url ?? 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=800&q=80'}
                                 alt={auction.title}
                                 className="w-full h-96 object-cover"
                             />
@@ -79,31 +271,23 @@ export default function AuctionDetail() {
                                     <Share2 size={18} className="text-gray-600" />
                                 </button>
                             </div>
-                            <div className="absolute bottom-4 left-4">
-                                <span className="badge-auction text-sm">🔨 Live Auction</span>
+                            <div className="absolute bottom-4 left-4 flex gap-2">
+                                {auction.status === 'ACTIVE'
+                                    ? <span className="badge-auction text-sm">🔨 Live Auction</span>
+                                    : <span className="bg-gray-800/70 text-white text-sm px-3 py-1 rounded-full">Auction Ended</span>
+                                }
                             </div>
                         </div>
 
-                        {/* Thumbnail row */}
-                        <div className="flex gap-3">
-                            {auction.images.map((img, i) => (
-                                <img key={i} src={img} alt="" className={`w-20 h-20 object-cover rounded-xl cursor-pointer border-2 ${i === 0 ? 'border-orange-500' : 'border-transparent'} hover:border-orange-300 transition-all`} />
-                            ))}
-                        </div>
-
-                        {/* Title row */}
+                        {/* Title + seller */}
                         <div>
-                            <div className="flex items-start justify-between gap-4">
-                                <h1 className="text-2xl font-bold text-gray-900">{auction.title}</h1>
-                            </div>
+                            <h1 className="text-2xl font-bold text-gray-900">{auction.title}</h1>
                             <div className="flex items-center gap-3 mt-2">
-                                {auction.verified && (
-                                    <span className="flex items-center gap-1 text-green-600 text-sm font-medium">
-                                        <CheckCircle size={16} /> {auction.seller} verified
-                                    </span>
-                                )}
+                                <span className="flex items-center gap-1 text-green-600 text-sm font-medium">
+                                    <CheckCircle size={16} /> {auction.seller_name}
+                                </span>
                                 <span className="flex items-center gap-1 text-gray-400 text-sm">
-                                    <MapPin size={14} /> {auction.location}
+                                    <MapPin size={14} /> Nagpur
                                 </span>
                             </div>
                         </div>
@@ -114,72 +298,98 @@ export default function AuctionDetail() {
                             <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-line">{auction.description}</p>
                         </div>
 
-                        {/* Specs */}
-                        <div className="card p-6">
-                            <h2 className="font-bold text-gray-900 mb-4">Item Specifics</h2>
-                            <div className="grid grid-cols-2 gap-3">
-                                {auction.specs.map((s) => (
-                                    <div key={s.label} className="bg-gray-50 rounded-lg p-3">
-                                        <p className="text-xs text-gray-400 font-medium">{s.label}</p>
-                                        <p className="text-sm text-gray-900 font-semibold mt-0.5">{s.value}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
                         {/* Bid History */}
                         <div className="card p-6">
-                            <h2 className="font-bold text-gray-900 mb-4">🕐 Bid History</h2>
-                            <div className="space-y-3">
-                                {auction.bids.map((b, i) => (
-                                    <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                                        <div>
-                                            <p className="text-sm font-semibold text-gray-800">{b.user}</p>
-                                            <p className="text-xs text-gray-400">{b.time}</p>
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="font-bold text-gray-900 flex items-center gap-2">
+                                    <Clock size={18} className="text-orange-500" /> Bid History
+                                </h2>
+                                <button onClick={fetchAll} className="text-gray-400 hover:text-orange-500 transition-colors">
+                                    <RefreshCw size={15} />
+                                </button>
+                            </div>
+                            {bids.length === 0 ? (
+                                <p className="text-sm text-gray-400 text-center py-4">No bids yet. Be the first!</p>
+                            ) : (
+                                <div className="space-y-3">
+                                    {bids.map((b, i) => (
+                                        <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                                            <div>
+                                                <p className="text-sm font-semibold text-gray-800">{b.bidder_tag}</p>
+                                                <p className="text-xs text-gray-400">{timeAgo(b.placed_at)}</p>
+                                            </div>
+                                            <p className="price-tag text-base">₹{b.amount.toLocaleString('en-IN')}</p>
                                         </div>
-                                        <p className="price-tag text-base">₹{b.amount.toLocaleString('en-IN')}</p>
-                                    </div>
-                                ))}
-                            </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                    </div>
 
-                    {/* Right: BidPanel */}
-                    <div className="space-y-4">
-                        <BidPanel
-                            auctionId={auction.id}
-                            endTime={auction.endTime}
-                            initialBid={auction.price}
-                            startPrice={auction.startPrice}
-                            userId={DEMO_USER_ID}
-                        />
-
-                        {/* Contact seller */}
-                        <a href={`/chat/${auction.id}`} className="card p-4 flex items-center gap-3 hover:shadow-md transition-shadow">
-                            <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center font-bold text-orange-600">
-                                {auction.seller[0]}
-                            </div>
-                            <div className="flex-1">
-                                <p className="text-sm font-semibold text-gray-900">{auction.seller}</p>
-                                <p className="text-xs text-orange-500">Message seller</p>
-                            </div>
-                        </a>
-                    </div>
-                </div>
-
-                {/* Related items */}
-                <div className="mt-12">
-                    <h2 className="section-title mb-6">You Might Also Like</h2>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        {RELATED.map((item) => (
-                            <div key={item.title} className="card overflow-hidden group cursor-pointer">
-                                <img src={item.img} alt={item.title} className="w-full h-36 object-cover group-hover:scale-105 transition-transform duration-300" />
-                                <div className="p-3">
-                                    <p className="text-sm font-semibold text-gray-900 truncate">{item.title}</p>
-                                    <p className="price-tag text-base mt-1">₹{item.price.toLocaleString('en-IN')}</p>
+                        {/* Auction ended info: show who won */}
+                        {auction.status === 'ENDED' && auction.highest_bidder_id && (
+                            <div className={`card p-4 flex items-center gap-3 border ${isWinner ? 'border-green-200 bg-green-50' : 'border-gray-200'}`}>
+                                <Gavel size={20} className={isWinner ? 'text-green-600' : 'text-gray-400'} />
+                                <div>
+                                    <p className="text-sm font-bold text-gray-900">
+                                        {isWinner ? '🎉 You won this auction!' : 'Auction concluded'}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        Final bid: ₹{auction.current_highest_bid.toLocaleString('en-IN')}
+                                    </p>
                                 </div>
                             </div>
-                        ))}
+                        )}
+                    </div>
+
+                    {/* Right: BidPanel or Settlement */}
+                    <div className="space-y-4">
+                        {auction.status === 'ACTIVE' ? (
+                            <BidPanel
+                                auctionId={auction.id}
+                                endTime={auction.end_time}
+                                initialBid={auction.current_highest_bid}
+                                startPrice={auction.start_price}
+                                userId={user?.id ?? ''}
+                                walletBalance={walletBalance}
+                                token={token}
+                            />
+                        ) : (
+                            <div className="card p-6 text-center space-y-2">
+                                <Gavel size={32} className="mx-auto text-gray-300" />
+                                <p className="font-semibold text-gray-700">Auction Closed</p>
+                                <p className="text-sm text-gray-400">
+                                    Final price: ₹{auction.current_highest_bid.toLocaleString('en-IN')}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Settlement Panel (only for winner/seller after auction ends) */}
+                        {auction.status === 'ENDED' && (
+                            <SettlementPanel
+                                auctionId={auction.id}
+                                isWinner={isWinner}
+                                isSeller={isSeller}
+                                winnerApproved={!!auction.winner_approved_at}
+                                sellerApproved={!!auction.seller_approved_at}
+                                settlementStatus={auction.settlement_status}
+                                amount={auction.current_highest_bid}
+                                token={token}
+                                onApproved={fetchAll}
+                            />
+                        )}
+
+                        {/* Contact seller (only show during active bidding for now) */}
+                        {auction.status === 'ACTIVE' && (
+                            <Link to={`/chat/${auction.seller_id}`} className="card p-4 flex items-center gap-3 hover:shadow-md transition-shadow block">
+                                <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center font-bold text-orange-600">
+                                    {auction.seller_name[0]}
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-sm font-semibold text-gray-900">{auction.seller_name}</p>
+                                    <p className="text-xs text-orange-500">Message seller</p>
+                                </div>
+                            </Link>
+                        )}
                     </div>
                 </div>
             </div>

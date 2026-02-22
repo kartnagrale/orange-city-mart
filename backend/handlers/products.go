@@ -112,6 +112,7 @@ func GetProduct(w http.ResponseWriter, r *http.Request) {
 		ID            string   `json:"id"`
 		SellerID      string   `json:"seller_id"`
 		SellerName    string   `json:"seller_name"`
+		SellerUPIID   *string  `json:"seller_upi_id"`
 		Title         string   `json:"title"`
 		Description   string   `json:"description"`
 		Category      string   `json:"category"`
@@ -129,7 +130,7 @@ func GetProduct(w http.ResponseWriter, r *http.Request) {
 	var endTime *time.Time
 
 	err := db.Pool.QueryRow(ctx, `
-		SELECT p.id, p.seller_id, u.name, p.title, p.description, p.category,
+		SELECT p.id, p.seller_id, u.name, u.upi_id, p.title, p.description, p.category,
 		       p.type, p.price, p.image_url, p.location,
 		       a.id, a.current_highest_bid, a.end_time, a.status
 		FROM products p
@@ -137,7 +138,7 @@ func GetProduct(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN auctions a ON a.product_id = p.id
 		WHERE p.id = $1`, id,
 	).Scan(
-		&p.ID, &p.SellerID, &p.SellerName, &p.Title, &p.Description, &p.Category,
+		&p.ID, &p.SellerID, &p.SellerName, &p.SellerUPIID, &p.Title, &p.Description, &p.Category,
 		&p.Type, &p.Price, &p.ImageURL, &p.Location,
 		&p.AuctionID, &p.CurrentBid, &endTime, &p.AuctionStatus,
 	)

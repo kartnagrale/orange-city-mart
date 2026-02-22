@@ -4,6 +4,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import LandingPage from './pages/LandingPage'
 import Dashboard from './pages/Dashboard'
 import AuctionDetail from './pages/AuctionDetail'
+import FixedListingDetail from './pages/FixedListingDetail'
 import SearchResults from './pages/SearchResults'
 import PostListing from './pages/PostListing'
 import ChatPage from './pages/ChatPage'
@@ -23,6 +24,7 @@ export default function App() {
           {/* All other routes require sign-in */}
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/auctions/:id" element={<ProtectedRoute><AuctionDetail /></ProtectedRoute>} />
+          <Route path="/listings/:id" element={<ProtectedRoute><FixedListingDetail /></ProtectedRoute>} />
           <Route path="/search" element={<ProtectedRoute><SearchResults /></ProtectedRoute>} />
           <Route path="/chat/:id" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
           <Route path="/listings/new" element={<ProtectedRoute><PostListing /></ProtectedRoute>} />

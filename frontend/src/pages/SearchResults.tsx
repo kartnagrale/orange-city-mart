@@ -125,7 +125,12 @@ export default function SearchResults() {
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                         {items.map((item) => (
-                            <Link key={item.id} to={item.auction_id ? `/auctions/${item.auction_id}` : `/auctions/${item.id}`} className="card overflow-hidden group block">
+                            <Link
+                                key={item.id}
+                                to={item.type === 'FIXED'
+                                    ? `/listings/${item.id}`
+                                    : `/auctions/${item.auction_id ?? item.id}`}
+                                className="card overflow-hidden group block">
                                 <div className="relative overflow-hidden">
                                     <img src={item.image_url ?? ''} alt={item.title} className="w-full h-44 object-cover group-hover:scale-105 transition-transform duration-300" />
                                     <div className="absolute top-2 left-2">

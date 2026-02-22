@@ -79,8 +79,8 @@ export default function Dashboard() {
                                         key={cat.label}
                                         onClick={() => setActiveCategory(cat.label)}
                                         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all ${activeCategory === cat.label
-                                                ? 'bg-orange-50 text-orange-700 font-semibold'
-                                                : 'text-gray-600 hover:bg-gray-50'
+                                            ? 'bg-orange-50 text-orange-700 font-semibold'
+                                            : 'text-gray-600 hover:bg-gray-50'
                                             }`}
                                     >
                                         <span>{cat.icon}</span> {cat.label}
@@ -146,7 +146,7 @@ export default function Dashboard() {
                                         </div>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                                             {(fixed.length > 0 ? fixed : products).slice(0, 6).map((item) => (
-                                                <Link key={item.id} to={item.auction_id ? `/auctions/${item.auction_id}` : `/auctions/${item.id}`} className="card overflow-hidden group block">
+                                                <Link key={item.id} to={item.type === 'FIXED' ? `/listings/${item.id}` : `/auctions/${item.auction_id}`} className="card overflow-hidden group block">
                                                     <div className="overflow-hidden">
                                                         <img src={item.image_url ?? ''} alt={item.title} className="w-full h-44 object-cover group-hover:scale-105 transition-transform duration-300" />
                                                     </div>

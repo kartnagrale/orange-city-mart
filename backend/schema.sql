@@ -57,22 +57,58 @@ CREATE TABLE IF NOT EXISTS transactions (
     id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     amount     NUMERIC(12, 2) NOT NULL,
-    type       VARCHAR(20) NOT NULL CHECK (type IN ('DEPOSIT', 'WITHDRAW', 'BID_HOLD', 'REFUND')),
+    type       VARCHAR(20) NOT NULL CHECK (type IN ('DEPOSIT', 'WITHDRAW', 'BID_HOLD', 'REFUND', 'TRANSFER')),
     status     VARCHAR(20) NOT NULL DEFAULT 'COMPLETED' CHECK (status IN ('PENDING', 'COMPLETED', 'FAILED')),
     reference  TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Bid Holds table
+-- One active hold per (auction, user) at any time.
+-- SOFT  = money deducted from wallet while auction is live (can be released on outbid)
+-- HARD  = auction ended, winner's hold is locked until settlement
+-- RELEASED = outbid / refunded; wallet already credited back
+-- SETTLED  = escrow complete; money transferred to seller
+CREATE TABLE IF NOT EXISTS bid_holds (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    auction_id  UUID NOT NULL REFERENCES auctions(id) ON DELETE CASCADE,
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    amount      NUMERIC(12, 2) NOT NULL,
+    status      VARCHAR(10) NOT NULL DEFAULT 'SOFT'
+                CHECK (status IN ('SOFT', 'HARD', 'RELEASED', 'SETTLED')),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Settlements table
+-- Created when an auction ends. Tracks dual-approval before money moves to seller.
+CREATE TABLE IF NOT EXISTS settlements (
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    auction_id          UUID UNIQUE NOT NULL REFERENCES auctions(id) ON DELETE CASCADE,
+    winner_id           UUID NOT NULL REFERENCES users(id),
+    seller_id           UUID NOT NULL REFERENCES users(id),
+    amount              NUMERIC(12, 2) NOT NULL,
+    winner_approved_at  TIMESTAMPTZ,
+    seller_approved_at  TIMESTAMPTZ,
+    status              VARCHAR(10) NOT NULL DEFAULT 'PENDING'
+                CHECK (status IN ('PENDING', 'COMPLETED')),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Indexes for performance
-CREATE INDEX IF NOT EXISTS idx_products_seller_id  ON products(seller_id);
-CREATE INDEX IF NOT EXISTS idx_products_type       ON products(type);
-CREATE INDEX IF NOT EXISTS idx_products_category   ON products(category);
-CREATE INDEX IF NOT EXISTS idx_auctions_product_id ON auctions(product_id);
-CREATE INDEX IF NOT EXISTS idx_auctions_status     ON auctions(status);
-CREATE INDEX IF NOT EXISTS idx_auctions_end_time   ON auctions(end_time);
-CREATE INDEX IF NOT EXISTS idx_bids_auction_id     ON bids(auction_id);
-CREATE INDEX IF NOT EXISTS idx_bids_user_id        ON bids(user_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_products_seller_id    ON products(seller_id);
+CREATE INDEX IF NOT EXISTS idx_products_type         ON products(type);
+CREATE INDEX IF NOT EXISTS idx_products_category     ON products(category);
+CREATE INDEX IF NOT EXISTS idx_auctions_product_id   ON auctions(product_id);
+CREATE INDEX IF NOT EXISTS idx_auctions_status       ON auctions(status);
+CREATE INDEX IF NOT EXISTS idx_auctions_end_time     ON auctions(end_time);
+CREATE INDEX IF NOT EXISTS idx_bids_auction_id       ON bids(auction_id);
+CREATE INDEX IF NOT EXISTS idx_bids_user_id          ON bids(user_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_user_id  ON transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_bid_holds_auction_id  ON bid_holds(auction_id);
+CREATE INDEX IF NOT EXISTS idx_bid_holds_user_id     ON bid_holds(user_id);
+CREATE INDEX IF NOT EXISTS idx_bid_holds_status      ON bid_holds(status);
+CREATE INDEX IF NOT EXISTS idx_settlements_auction   ON settlements(auction_id);
 
 -- Trigger to auto-update updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -89,6 +125,8 @@ CREATE TRIGGER update_products_updated_at
     BEFORE UPDATE ON products FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_auctions_updated_at
     BEFORE UPDATE ON auctions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_bid_holds_updated_at
+    BEFORE UPDATE ON bid_holds FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ─── Seed Data ────────────────────────────────────────────────────────────────
 -- Password for all demo users: demo1234

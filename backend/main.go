@@ -43,10 +43,7 @@ func main() {
 	// ── Router ────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
 
-	// ── Static file server for uploaded images ────────────────────────────
-	uploadsFS := http.FileServer(http.Dir("./uploads"))
-	r.Handle("/uploads/*", http.StripPrefix("/uploads/", uploadsFS))
-
+	// Middleware must all come before any route/handle registrations
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
@@ -56,6 +53,10 @@ func main() {
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "multipart/form-data"},
 		AllowCredentials: true,
 	}))
+
+	// ── Static file server for uploaded images ─────────────────────────────
+	uploadsFS := http.FileServer(http.Dir("./uploads"))
+	r.Handle("/uploads/*", http.StripPrefix("/uploads/", uploadsFS))
 
 	// Health
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -86,7 +87,9 @@ func main() {
 	// ── Auctions ──────────────────────────────────────────────────────────
 	r.Route("/api/auctions", func(r chi.Router) {
 		r.Get("/{id}", auctionHandler.GetAuction)
+		r.Get("/{id}/bids", auctionHandler.GetAuctionBids)
 		r.With(authmw.RequireAuth).Post("/{id}/bid", auctionHandler.PlaceBid)
+		r.With(authmw.RequireAuth).Post("/{id}/settle", auctionHandler.ApproveSettlement)
 	})
 
 	// ── Protected routes ──────────────────────────────────────────────────

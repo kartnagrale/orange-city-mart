@@ -3,13 +3,16 @@ import { Upload, X, Tag, MapPin, Camera, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import toast from 'react-hot-toast'
+import { useAuth } from '../context/AuthContext'
 
 const CATEGORIES = ['Electronics', 'Furniture', 'Fashion', 'Vehicles', 'Properties', 'Sports', 'Books', 'Other']
-const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
+// Use empty string so all fetch calls use relative URLs → proxied by Vite to the backend
+const API = ''
 
 export default function PostListing() {
     const navigate = useNavigate()
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const { token } = useAuth()
 
     const [listingType, setListingType] = useState<'FIXED' | 'AUCTION'>('FIXED')
     const [title, setTitle] = useState('')
@@ -25,8 +28,6 @@ export default function PostListing() {
     const [imagePreview, setImagePreview] = useState<string | null>(null)
     const [uploading, setUploading] = useState(false)
     const [submitting, setSubmitting] = useState(false)
-
-    const token = localStorage.getItem('token')
 
     // ── Upload handler ────────────────────────────────────────────────────────
     const uploadFile = async (file: File) => {
