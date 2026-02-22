@@ -1,11 +1,14 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // MessageType constants for WebSocket payloads.
@@ -36,22 +39,24 @@ type Client struct {
 //   - ChatRooms:    keyed by chat "room"  → peer-to-peer chat
 type Hub struct {
 	mu           sync.RWMutex
-	clients      map[*Client]struct{}   // all connected clients
-	userIndex    map[string]*Client     // userID → client (for targeted messages)
-	auctionRooms map[string][]*Client   // auctionID → clients watching it
-	chatRooms    map[string][]*Client   // roomID    → clients in it
+	clients      map[*Client]struct{} // all connected clients
+	userIndex    map[string]*Client   // userID → client (for targeted messages)
+	auctionRooms map[string][]*Client // auctionID → clients watching it
+	chatRooms    map[string][]*Client // roomID    → clients in it
+	db           *pgxpool.Pool        // for persisting chat messages
 
 	register   chan *Client
 	unregister chan *Client
 }
 
 // NewHub creates and returns an initialised Hub.
-func NewHub() *Hub {
+func NewHub(db *pgxpool.Pool) *Hub {
 	return &Hub{
 		clients:      make(map[*Client]struct{}),
 		userIndex:    make(map[string]*Client),
 		auctionRooms: make(map[string][]*Client),
 		chatRooms:    make(map[string][]*Client),
+		db:           db,
 		register:     make(chan *Client, 256),
 		unregister:   make(chan *Client, 256),
 	}
@@ -183,17 +188,79 @@ func (h *Hub) NewClient(userID, auctionID, roomID string, conn *websocket.Conn) 
 	return c
 }
 
-// readPump drains incoming messages (we don't use them for auctions, but must read to detect disconnects).
+// readPump drains incoming messages and handles chat_send frames.
 func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
 		c.conn.Close()
 	}()
 	for {
-		_, _, err := c.conn.ReadMessage()
+		_, data, err := c.conn.ReadMessage()
 		if err != nil {
 			break
 		}
+		// Only process messages from authenticated chat clients.
+		if c.ID == "" || c.RoomID == "" {
+			continue
+		}
+		var frame struct {
+			Type    string `json:"type"`
+			Payload struct {
+				Body     *string `json:"body"`
+				ImageURL *string `json:"image_url"`
+			} `json:"payload"`
+		}
+		if err := json.Unmarshal(data, &frame); err != nil {
+			continue
+		}
+		if frame.Type != "chat_send" {
+			continue
+		}
+		if frame.Payload.Body == nil && frame.Payload.ImageURL == nil {
+			continue
+		}
+
+		// Persist message to DB.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		var msgID, senderName string
+		var createdAt time.Time
+		err = c.hub.db.QueryRow(ctx, `
+			INSERT INTO messages (room_id, sender_id, body, image_url)
+			VALUES ($1, $2, $3, $4)
+			RETURNING id, created_at`,
+			c.RoomID, c.ID, frame.Payload.Body, frame.Payload.ImageURL,
+		).Scan(&msgID, &createdAt)
+		if err != nil {
+			cancel()
+			log.Printf("hub: failed to persist chat message: %v", err)
+			continue
+		}
+		_ = c.hub.db.QueryRow(ctx, `SELECT name FROM users WHERE id = $1`, c.ID).Scan(&senderName)
+		cancel()
+
+		// Build and broadcast chat_message event.
+		type chatPayload struct {
+			ID         string  `json:"id"`
+			RoomID     string  `json:"room_id"`
+			SenderID   string  `json:"sender_id"`
+			SenderName string  `json:"sender_name"`
+			Body       *string `json:"body"`
+			ImageURL   *string `json:"image_url"`
+			CreatedAt  string  `json:"created_at"`
+		}
+		payloadBytes, _ := json.Marshal(chatPayload{
+			ID:         msgID,
+			RoomID:     c.RoomID,
+			SenderID:   c.ID,
+			SenderName: senderName,
+			Body:       frame.Payload.Body,
+			ImageURL:   frame.Payload.ImageURL,
+			CreatedAt:  createdAt.UTC().Format(time.RFC3339),
+		})
+		c.hub.BroadcastToChat(c.RoomID, Message{
+			Type:    TypeChatMessage,
+			Payload: json.RawMessage(payloadBytes),
+		})
 	}
 }
 

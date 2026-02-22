@@ -95,6 +95,19 @@ CREATE TABLE IF NOT EXISTS settlements (
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Messages table for peer-to-peer chat
+-- room_id = sorted(userA_id, userB_id) joined by "_"
+-- either body OR image_url is set per message (never both null)
+CREATE TABLE IF NOT EXISTS messages (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    room_id     TEXT NOT NULL,
+    sender_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    body        TEXT,
+    image_url   TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_body_or_image CHECK (body IS NOT NULL OR image_url IS NOT NULL)
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_products_seller_id    ON products(seller_id);
 CREATE INDEX IF NOT EXISTS idx_products_type         ON products(type);

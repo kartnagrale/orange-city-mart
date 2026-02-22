@@ -34,11 +34,12 @@ func main() {
 	log.Println("✅ Connected to PostgreSQL")
 
 	// ── WebSocket Hub ─────────────────────────────────────────────────────
-	wsHub := hub.NewHub()
-	go wsHub.Run()
+	appHub := hub.NewHub(db.Pool)
+	go appHub.Run()
 
 	// ── Handlers ──────────────────────────────────────────────────────────
-	auctionHandler := &handlers.AuctionHandler{Hub: wsHub}
+	auctionHandler := &handlers.AuctionHandler{Hub: appHub}
+	chatHandler := &handlers.ChatHandler{Hub: appHub}
 
 	// ── Router ────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
@@ -81,7 +82,7 @@ func main() {
 		userID := r.URL.Query().Get("user_id")
 		auctionID := r.URL.Query().Get("auction_id")
 		roomID := r.URL.Query().Get("room_id")
-		wsHub.NewClient(userID, auctionID, roomID, conn)
+		appHub.NewClient(userID, auctionID, roomID, conn)
 	})
 
 	// ── Auctions ──────────────────────────────────────────────────────────
@@ -101,6 +102,11 @@ func main() {
 		r.Post("/api/wallet/deposit", handlers.Deposit)
 		r.Post("/api/wallet/withdraw", handlers.Withdraw)
 		r.Get("/api/bids", handlers.ListMyBids)
+
+		// ── Chat ──────────────────────────────────────────────────────────
+		r.Get("/api/chat/conversations", chatHandler.GetConversations)
+		r.Get("/api/chat/rooms/{roomId}/messages", chatHandler.GetMessages)
+		r.Post("/api/chat/rooms/{roomId}/messages", chatHandler.SendMessage)
 	})
 
 	// ── Server ────────────────────────────────────────────────────────────
