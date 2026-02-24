@@ -3,12 +3,14 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/karti/orange-city-mart/backend/db"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -92,8 +94,9 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		req.Name, req.Email, string(hash),
 	).Scan(&u.ID, &u.Name, &u.Email, &u.WalletBalance)
 	if err != nil {
-		// Unique constraint violation (duplicate email)
-		if err.Error() != "" {
+		// Check specifically for PostgreSQL unique constraint violation (duplicate email)
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			http.Error(w, "email already registered", http.StatusConflict)
 			return
 		}
