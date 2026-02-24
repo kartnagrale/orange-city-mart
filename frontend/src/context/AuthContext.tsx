@@ -18,7 +18,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
-const API = '/api'
+import { API_URL as API } from '../config'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(() => {
@@ -48,8 +48,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data.user)
     }
 
+    // Fetch with 60 s timeout — Render free tier can take 50 s to cold-start
+    const fetchWithTimeout = async (url: string, options: RequestInit) => {
+        const controller = new AbortController()
+        const timerId = setTimeout(() => controller.abort(), 60_000)
+        try {
+            return await fetch(url, { ...options, signal: controller.signal })
+        } catch (err: unknown) {
+            if (err instanceof Error && err.name === 'AbortError') {
+                throw new Error('Backend is waking up — please wait 30 s and try again.')
+            }
+            throw new Error('Cannot reach server. Check your connection and try again.')
+        } finally {
+            clearTimeout(timerId)
+        }
+    }
+
     const login = async (email: string, password: string) => {
-        const res = await fetch(`${API}/auth/login`, {
+        const res = await fetchWithTimeout(`${API}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password }),
@@ -62,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const register = async (name: string, email: string, password: string) => {
-        const res = await fetch(`${API}/auth/register`, {
+        const res = await fetchWithTimeout(`${API}/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, email, password }),

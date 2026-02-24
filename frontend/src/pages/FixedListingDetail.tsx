@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import { useAuth } from '../context/AuthContext'
+import { API_URL } from '../config'
 
 interface ProductDetail {
     id: string
@@ -40,7 +41,7 @@ export default function FixedListingDetail() {
         if (!id) return
         const headers: Record<string, string> = {}
         if (token) headers.Authorization = `Bearer ${token}`
-        fetch(`/api/products/${id}`, { headers })
+        fetch(`${API_URL}/products/${id}`, { headers })
             .then(async r => {
                 if (!r.ok) throw new Error('Listing not found')
                 return r.json()

@@ -8,6 +8,7 @@ import Navbar from '../components/Navbar'
 import { useAuth } from '../context/AuthContext'
 import { useChatSocket, type ChatMessage } from '../hooks/useChatSocket'
 import toast from 'react-hot-toast'
+import { API_URL } from '../config'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -101,8 +102,8 @@ function MessageBubble({
                     </div>
                 ) : (
                     <div className={`px-4 py-2.5 rounded-2xl text-sm ${isMe
-                            ? 'bg-orange-500 text-white rounded-br-sm'
-                            : 'bg-gray-100 text-gray-900 rounded-bl-sm'
+                        ? 'bg-orange-500 text-white rounded-br-sm'
+                        : 'bg-gray-100 text-gray-900 rounded-bl-sm'
                         }`}>
                         <p className="leading-relaxed whitespace-pre-wrap">{msg.body}</p>
                     </div>
@@ -171,7 +172,7 @@ export default function ChatPage() {
     const fetchConversations = useCallback(async () => {
         if (!token) return
         try {
-            const res = await fetch('/api/chat/conversations', {
+            const res = await fetch(`${API_URL}/chat/conversations`, {
                 headers: authHeaders(),
             })
             if (res.ok) {
@@ -199,7 +200,7 @@ export default function ChatPage() {
         setIsLoadingMsgs(true)
 
         const rid = buildRoomId(myId, activeOtherId)
-        fetch(`/api/chat/rooms/${rid}/messages`, { headers: authHeaders() })
+        fetch(`${API_URL}/chat/rooms/${rid}/messages`, { headers: authHeaders() })
             .then(async r => {
                 if (!r.ok) throw new Error()
                 return r.json() as Promise<ChatMessage[]>
@@ -228,7 +229,7 @@ export default function ChatPage() {
         setInput('')
         setIsSending(true)
         try {
-            const res = await fetch(`/api/chat/rooms/${currentRoomId}/messages`, {
+            const res = await fetch(`${API_URL}/chat/rooms/${currentRoomId}/messages`, {
                 method: 'POST',
                 headers: authHeaders(),
                 body: JSON.stringify({ body }),
@@ -264,8 +265,8 @@ export default function ChatPage() {
         try {
             // 1. Upload the file
             const formData = new FormData()
-            formData.append('file', file)
-            const uploadRes = await fetch('/api/upload', {
+            formData.append('image', file)
+            const uploadRes = await fetch(`${API_URL}/upload`, {
                 method: 'POST',
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
                 body: formData,
@@ -274,7 +275,7 @@ export default function ChatPage() {
             const { url } = await uploadRes.json()
 
             // 2. Send the image URL as a message
-            const msgRes = await fetch(`/api/chat/rooms/${currentRoomId}/messages`, {
+            const msgRes = await fetch(`${API_URL}/chat/rooms/${currentRoomId}/messages`, {
                 method: 'POST',
                 headers: authHeaders(),
                 body: JSON.stringify({ image_url: url }),

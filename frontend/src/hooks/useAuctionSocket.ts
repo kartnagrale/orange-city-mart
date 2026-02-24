@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import toast from 'react-hot-toast'
+import { WS_URL } from '../config'
 
 export interface BidUpdate {
     auction_id: string
@@ -48,9 +49,7 @@ export function useAuctionSocket({
     const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     const connect = useCallback(() => {
-        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-        const host = window.location.host
-        const url = `${protocol}://${host}/ws?auction_id=${auctionId}&user_id=${userId}`
+        const url = `${WS_URL}?auction_id=${auctionId}&user_id=${userId}`
 
         const ws = new WebSocket(url)
         wsRef.current = ws

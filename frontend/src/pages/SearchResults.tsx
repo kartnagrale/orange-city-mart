@@ -3,6 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom'
 import { Search, SlidersHorizontal, MapPin, Clock, X, Loader2 } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import { useAuth } from '../context/AuthContext'
+import { API_URL } from '../config'
 
 interface Product {
     id: string
@@ -39,7 +40,7 @@ export default function SearchResults() {
         if (category !== 'All') qs.set('category', category)
         if (type !== 'All') qs.set('type', type)
 
-        fetch(`/api/products?${qs.toString()}`, {
+        fetch(`${API_URL}/products?${qs.toString()}`, {
             headers: token ? { Authorization: `Bearer ${token}` } : {},
         })
             .then(r => r.json())

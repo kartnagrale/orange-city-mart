@@ -8,6 +8,7 @@ import Navbar from '../components/Navbar'
 import BidPanel from '../components/BidPanel'
 import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
+import { API_URL } from '../config'
 
 interface AuctionData {
     id: string
@@ -95,7 +96,7 @@ function SettlementPanel({
     const handleApprove = async () => {
         setLoading(true)
         try {
-            const res = await fetch(`/api/auctions/${auctionId}/settle`, {
+            const res = await fetch(`${API_URL}/auctions/${auctionId}/settle`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
             })
@@ -185,9 +186,9 @@ export default function AuctionDetail() {
             if (token) headers.Authorization = `Bearer ${token}`
 
             const [aRes, bRes, wRes] = await Promise.all([
-                fetch(`/api/auctions/${id}`, { headers }),
-                fetch(`/api/auctions/${id}/bids`, { headers }),
-                token ? fetch('/api/wallet', { headers }) : Promise.resolve(null),
+                fetch(`${API_URL}/auctions/${id}`, { headers }),
+                fetch(`${API_URL}/auctions/${id}/bids`, { headers }),
+                token ? fetch(`${API_URL}/wallet`, { headers }) : Promise.resolve(null),
             ])
 
             if (!aRes.ok) throw new Error('Auction not found')

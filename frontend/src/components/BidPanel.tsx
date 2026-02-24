@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Gavel, Wifi, WifiOff, Clock, Wallet, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuctionSocket } from '../hooks/useAuctionSocket'
+import { API_URL } from '../config'
 
 interface BidPanelProps {
     auctionId: string
@@ -61,7 +62,7 @@ export default function BidPanel({
         }
         setIsSubmitting(true)
         try {
-            const res = await fetch(`/api/auctions/${auctionId}/bid`, {
+            const res = await fetch(`${API_URL}/auctions/${auctionId}/bid`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

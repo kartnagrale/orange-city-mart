@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { WS_URL } from '../config'
 
 export interface ChatMessage {
     id: string
@@ -32,9 +33,7 @@ export function useChatSocket({ roomId, userId }: UseChatSocketOptions) {
     const connect = useCallback(() => {
         if (!roomId || !userId) return
 
-        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-        const host = window.location.host
-        const url = `${protocol}://${host}/ws?user_id=${userId}&room_id=${roomId}`
+        const url = `${WS_URL}?user_id=${userId}&room_id=${roomId}`
 
         const ws = new WebSocket(url)
         wsRef.current = ws

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowRight, Gavel, Clock, MapPin, Zap, Tag, Loader2 } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import { useAuth } from '../context/AuthContext'
+import { API_URL } from '../config'
 
 interface Product {
     id: string
@@ -52,7 +53,7 @@ export default function Dashboard() {
 
     useEffect(() => {
         const cat = activeCategory === 'All Categories' ? '' : activeCategory
-        fetch(`/api/products?category=${encodeURIComponent(cat)}`, {
+        fetch(`${API_URL}/products?category=${encodeURIComponent(cat)}`, {
             headers: token ? { Authorization: `Bearer ${token}` } : {},
         })
             .then(r => r.json())

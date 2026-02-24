@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Wallet, ArrowDownCircle, ArrowUpCircle, TrendingUp, Clock, ChevronRight, Loader2 } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import { useAuth } from '../context/AuthContext'
+import { API_URL } from '../config'
 
 interface Transaction {
     id: string
@@ -36,7 +37,7 @@ export default function WalletPage() {
 
     const fetchWallet = () => {
         if (!token) return
-        fetch('/api/wallet', { headers: { Authorization: `Bearer ${token}` } })
+        fetch(`${API_URL}/wallet`, { headers: { Authorization: `Bearer ${token}` } })
             .then(r => r.json())
             .then(d => { setBalance(d.balance); setTxns(d.transactions ?? []) })
             .catch(console.error)
@@ -51,7 +52,7 @@ export default function WalletPage() {
         if (modal === 'withdraw' && val > balance) { setError('Insufficient balance'); return }
         setWorking(true); setError('')
 
-        const url = modal === 'deposit' ? '/api/wallet/deposit' : '/api/wallet/withdraw'
+        const url = modal === 'deposit' ? `${API_URL}/wallet/deposit` : `${API_URL}/wallet/withdraw`
         const body = modal === 'deposit'
             ? { amount: val, upi_ref: `UPI${Date.now()}` }
             : { amount: val, upi_id: user?.email ?? 'user@upi' }

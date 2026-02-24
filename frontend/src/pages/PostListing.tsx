@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext'
 
 const CATEGORIES = ['Electronics', 'Furniture', 'Fashion', 'Vehicles', 'Properties', 'Sports', 'Books', 'Other']
 // Use empty string so all fetch calls use relative URLs → proxied by Vite to the backend
-const API = ''
+import { API_URL as API } from '../config'
 
 export default function PostListing() {
     const navigate = useNavigate()

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { Gavel, Clock, Trophy, AlertCircle, ArrowUpCircle, Loader2 } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import { useAuth } from '../context/AuthContext'
+import { API_URL } from '../config'
 
 type BidStatus = 'WINNING' | 'OUTBID' | 'WON' | 'LOST'
 
@@ -62,7 +63,7 @@ export default function MyBids() {
 
     useEffect(() => {
         if (!token) return
-        fetch('/api/bids', { headers: { Authorization: `Bearer ${token}` } })
+        fetch(`${API_URL}/bids`, { headers: { Authorization: `Bearer ${token}` } })
             .then(r => r.json())
             .then(data => setBids(dedupe(data)))
             .catch(console.error)
