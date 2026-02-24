@@ -36,9 +36,6 @@ jobs:
         
       - name: Build
         run: cd frontend && npm run build
-        env:
-          VITE_API_URL: https://ocm-backend-0fsf.onrender.com/api
-          VITE_WS_URL: wss://ocm-backend-0fsf.onrender.com/ws
           
       - name: Setup Pages
         uses: actions/configure-pages@v4
