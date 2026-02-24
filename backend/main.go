@@ -48,28 +48,28 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
-	allowedOrigins := []string{
-		"http://localhost:5173",
-		"http://frontend:5173",
-		"https://kartnagrale.github.io", // GitHub Pages production frontend
-	}
-	if frontendURL := os.Getenv("FRONTEND_URL"); frontendURL != "" {
-		allowedOrigins = append(allowedOrigins, frontendURL)
-	}
-
-	// When running locally (no FRONTEND_URL = not on Render), allow all origins
-	// so Cloudflare tunnel and local dev tools work without CORS issues.
 	isLocal := os.Getenv("FRONTEND_URL") == ""
+
+	corsOptions := cors.Options{
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "multipart/form-data"},
+	}
 	if isLocal {
-		allowedOrigins = []string{"*"}
+		// Accept any origin locally — needed for Cloudflare tunnel (trycloudflare.com)
+		corsOptions.AllowOriginFunc = func(r *http.Request, origin string) bool { return true }
+	} else {
+		corsOptions.AllowedOrigins = []string{
+			"http://localhost:5173",
+			"http://frontend:5173",
+			"https://kartnagrale.github.io",
+		}
+		if frontendURL := os.Getenv("FRONTEND_URL"); frontendURL != "" {
+			corsOptions.AllowedOrigins = append(corsOptions.AllowedOrigins, frontendURL)
+		}
+		corsOptions.AllowCredentials = true
 	}
 
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   allowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "multipart/form-data"},
-		AllowCredentials: !isLocal, // credentials not allowed with wildcard origin
-	}))
+	r.Use(cors.Handler(corsOptions))
 
 	// ── Static file server for uploaded images ─────────────────────────────
 	uploadsFS := http.FileServer(http.Dir("./uploads"))
