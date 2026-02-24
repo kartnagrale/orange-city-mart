@@ -57,11 +57,18 @@ func main() {
 		allowedOrigins = append(allowedOrigins, frontendURL)
 	}
 
+	// When running locally (no FRONTEND_URL = not on Render), allow all origins
+	// so Cloudflare tunnel and local dev tools work without CORS issues.
+	isLocal := os.Getenv("FRONTEND_URL") == ""
+	if isLocal {
+		allowedOrigins = []string{"*"}
+	}
+
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "multipart/form-data"},
-		AllowCredentials: true,
+		AllowCredentials: !isLocal, // credentials not allowed with wildcard origin
 	}))
 
 	// ── Static file server for uploaded images ─────────────────────────────
