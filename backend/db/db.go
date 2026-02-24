@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -21,6 +22,10 @@ func Connect(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse DATABASE_URL: %w", err)
 	}
+
+	// Use simple protocol — required for Supabase transaction pooler (port 6543).
+	// The transaction pooler does not support server-side prepared statements.
+	config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
