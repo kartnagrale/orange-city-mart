@@ -48,7 +48,7 @@ export default function PostListing() {
             const form = new FormData()
             form.append('image', file)
 
-            const res = await fetch(`${API}/api/upload`, {
+            const res = await fetch(`${API}/upload`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
                 body: form,
@@ -108,7 +108,7 @@ export default function PostListing() {
                 payload.end_time = new Date(endDate).toISOString()
             }
 
-            const res = await fetch(`${API}/api/products`, {
+            const res = await fetch(`${API}/products`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

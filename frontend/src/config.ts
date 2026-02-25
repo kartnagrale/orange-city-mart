@@ -1,10 +1,17 @@
 ﻿// Centralized configuration for the Orange City Mart frontend
+//
+// Uses relative URLs so the Vite proxy (and any reverse-proxy in prod)
+// forwards /api → backend and /ws → backend WS.
+// Override with env vars for staging / production deploys.
 
-// Use Vite environment variables if available, otherwise fall back to local tunnel backend
-const TUNNEL_URL = 'https://difference-glance-clear-matthew.trycloudflare.com';
-export const API_URL = import.meta.env.VITE_API_URL || `${TUNNEL_URL}/api`;
-export const WS_URL = import.meta.env.VITE_WS_URL || `${TUNNEL_URL.replace('https', 'wss')}/ws`;
-export const BASE_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : TUNNEL_URL;
+export const API_URL = import.meta.env.VITE_API_URL || '/api'
 
+// WebSocket URL must be absolute. Derive from window.location at runtime
+// so it works behind any proxy (http→ws, https→wss).
+function buildWsUrl(): string {
+    if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    return `${protocol}://${window.location.host}/ws`
+}
 
-
+export const WS_URL = buildWsUrl()
