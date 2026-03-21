@@ -18,11 +18,14 @@ services:
     networks:
       - ocm-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  # ── Go backend (original) ─────────────────────────────────────────────────
+  # Start with: docker compose up  (default)
+  # or:         docker compose --profile go up
   backend:
     build:
       context: ./backend
@@ -34,13 +37,37 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
       PORT: "8080"
-    ports:
-      - "8080:8080"
     depends_on:
       db:
         condition: service_healthy
     networks:
       - ocm-network
+    profiles:
+      - go
+
+  # ── Java backend (Spring Boot) ────────────────────────────────────────────
+  # Start with: docker compose --profile java up
+  backend-java:
+    build:
+      context: ./backend-java
+      dockerfile: Dockerfile
+    container_name: ocm-backend-java
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: "8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - ocm-network
+    profiles:
+      - java
 
   frontend:
     build:
@@ -48,18 +75,48 @@ services:
       dockerfile: Dockerfile
     container_name: ocm-frontend
     restart: unless-stopped
-    ports:
-      - "5173:5173"
-    depends_on:
-      - backend
+    # No depends_on backend here — nginx retries are sufficient
     networks:
       - ocm-network
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/public:/app/public
 
+  # ── Nginx → Go backend ────────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: ocm-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+    networks:
+      - ocm-network
+    profiles:
+      - go
+
+  # ── Nginx → Java backend ──────────────────────────────────────────────────
+  nginx-java:
+    image: nginx:alpine
+    container_name: ocm-nginx-java
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx-java.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+    networks:
+      - ocm-network
+    profiles:
+      - java
+
 volumes:
   pgdata:
+
 
 networks:
   ocm-network:
