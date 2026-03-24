@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Orange City Mart",
+    "slug": "orange-city-mart-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "bundleIdentifier": "com.karti.orangecitymart",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.karti.orangecitymart",
+      "adaptiveIcon": {
+        "backgroundColor": "#f97316",
+        "foregroundImage": "./assets/icon.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
